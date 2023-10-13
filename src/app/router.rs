@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
+use super::auth::verify_password;
 use super::redirection::normalize_path;
 use super::session::Session;
 
@@ -19,6 +21,7 @@ const SIGNIN_HTML: &str = include_str!("../../resources/signin.html");
 pub struct AppConfig {
     pub session_absolute_timeout: Duration,
     pub session_secret_key: Vec<u8>,
+    pub users: HashMap<String, String>,
 }
 
 impl FromRef<AppConfig> for Key {
@@ -74,7 +77,13 @@ async fn signin(
     };
     let rd = normalize_path(uri.path(), &rd).ok_or(StatusCode::BAD_REQUEST)?;
 
-    // TODO: validate username and password
+    let ok = verify_password(config.users, &form.username, &form.password).map_err(|err| {
+        log::error!("password verification error: {}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    if !ok {
+        return Err(StatusCode::FORBIDDEN.into());
+    }
 
     log::info!("user '{}' authenticated", form.username);
 

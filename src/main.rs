@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::from_utf8;
 use std::time::Duration;
@@ -52,6 +53,7 @@ async fn serve(args: ServeArgs) -> Result<()> {
             60 * 60 * args.session_absolute_timeout_hours,
         ),
         session_secret_key: secret_key,
+        users: HashMap::new(),
     };
     let app = config.build();
 
