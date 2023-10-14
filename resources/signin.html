@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Sign In</title>
+    </head>
+    <body>
+        <form method="post">
+            <input type="text" name="username" id="username" required />
+            <input type="password" name="password" id="password" required />
+            <input type="hidden" name="redirect" id="redirect" required />
+            <input type="submit" />
+        </form>
+    </body>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const rd = urlParams.get("rd");
+            const rdElem = document.getElementById("redirect");
+            if(rdElem === null) {
+                console.warn("cannot find `rd`");
+                return;
+            }
+            rdElem.value = rd;
+        });
+    </script>
+</html>
