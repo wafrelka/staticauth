@@ -7,20 +7,21 @@
         <form method="post">
             <input type="text" name="username" id="username" required />
             <input type="password" name="password" id="password" required />
-            <input type="hidden" name="redirect" id="redirect" required />
             <input type="submit" />
         </form>
+        <div id="error"></div>
     </body>
     <script>
+        const errorMsgs = new Map([
+            ["invalid_username_password", "invalid username or password"],
+        ]);
+        const error = "{{error}}";
         document.addEventListener("DOMContentLoaded", () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const rd = urlParams.get("rd");
-            const rdElem = document.getElementById("redirect");
-            if(rdElem === null) {
-                console.warn("cannot find `rd`");
-                return;
+            if(error && errorMsgs.get(error)) {
+                const msg = errorMsgs.get(error);
+                const elem = document.getElementById("error");
+                elem.textContent = msg;
             }
-            rdElem.value = rd;
         });
     </script>
 </html>

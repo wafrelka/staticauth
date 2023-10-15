@@ -12,10 +12,20 @@ use axum::routing::get;
 use axum::{Form, Json, Router};
 use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
 use chrono::Utc;
+use handlebars::Handlebars;
 use serde::Deserialize;
+use serde::Serialize;
 
 const SESSION_COOKIE_NAME: &str = "session";
-const SIGNIN_HTML: &str = include_str!("../../resources/signin.html");
+const SIGNIN_HTML_TEMPLATE: &str = include_str!("../../resources/signin.html");
+
+fn get_signin_html(error: String) -> String {
+    #[derive(Serialize)]
+    struct Context {
+        error: String,
+    }
+    Handlebars::new().render_template(SIGNIN_HTML_TEMPLATE, &Context { error }).unwrap()
+}
 
 #[derive(Debug, Clone)]
 pub struct ServiceConfig {
@@ -50,27 +60,28 @@ impl ServiceConfig {
 struct SignInForm {
     username: String,
     password: String,
-    redirect_to: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct RedirectionQuery {
+struct SignInQuery {
     #[serde(rename = "rd")]
     redirect_to: Option<String>,
 }
 
 async fn front(jar: SignedCookieJar) -> impl IntoResponse {
     let jar = jar.remove(Cookie::named(SESSION_COOKIE_NAME));
-    (jar, Html::from(SIGNIN_HTML))
+    let html = get_signin_html("".into());
+    (jar, Html::from(html))
 }
 
 async fn signin(
     State(config): State<ServiceConfig>,
     uri: Uri,
     jar: SignedCookieJar,
+    Query(query): Query<SignInQuery>,
     Form(form): Form<SignInForm>,
 ) -> ResponseResult<Response> {
-    let rd = match form.redirect_to {
+    let rd = match query.redirect_to {
         Some(r) if r.is_empty() => "./auth".into(),
         Some(r) => r,
         None => "./auth".into(),
@@ -82,7 +93,8 @@ async fn signin(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     if !ok {
-        return Err(StatusCode::FORBIDDEN.into());
+        let html = get_signin_html("invalid_username_password".into());
+        return Err((StatusCode::FORBIDDEN, Html::from(html)).into());
     }
 
     log::info!("user '{}' authenticated", form.username);
@@ -95,9 +107,15 @@ async fn signin(
     Ok((jar, Redirect::to(&rd)).into_response())
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct SignOutQuery {
+    #[serde(rename = "rd")]
+    redirect_to: Option<String>,
+}
+
 async fn signout(
     uri: Uri,
-    Query(query): Query<RedirectionQuery>,
+    Query(query): Query<SignOutQuery>,
     jar: SignedCookieJar,
 ) -> ResponseResult<Response> {
     let rd = match query.redirect_to {
