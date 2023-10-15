@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-use staticauth::app::AppConfig;
+use staticauth::service::ServiceConfig;
 
 #[derive(Debug, Parser)]
 struct GenerateArgs {
@@ -46,23 +46,23 @@ async fn read_key(path: PathBuf) -> Result<Vec<u8>> {
 async fn serve(args: ServeArgs) -> Result<()> {
     let secret_key = match args.session_secret_key_file {
         Some(path) => read_key(path).await?,
-        None => AppConfig::generate_key(),
+        None => ServiceConfig::generate_key(),
     };
-    let config = AppConfig {
+    let config = ServiceConfig {
         session_absolute_timeout: Duration::from_secs(
             60 * 60 * args.session_absolute_timeout_hours,
         ),
         session_secret_key: secret_key,
         users: HashMap::new(),
     };
-    let app = config.build();
+    let service = config.build();
 
-    axum::Server::bind(&args.address.parse()?).serve(app.into_make_service()).await.unwrap();
+    axum::Server::bind(&args.address.parse()?).serve(service.into_make_service()).await.unwrap();
     Ok(())
 }
 
 async fn generate(args: GenerateArgs) -> Result<()> {
-    let key = AppConfig::generate_key();
+    let key = ServiceConfig::generate_key();
     let key = hex::encode(key);
     match args.output {
         Some(path) => {

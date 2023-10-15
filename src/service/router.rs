@@ -18,20 +18,20 @@ const SESSION_COOKIE_NAME: &str = "session";
 const SIGNIN_HTML: &str = include_str!("../../resources/signin.html");
 
 #[derive(Debug, Clone)]
-pub struct AppConfig {
+pub struct ServiceConfig {
     pub session_absolute_timeout: Duration,
     pub session_secret_key: Vec<u8>,
     pub users: HashMap<String, String>,
 }
 
-impl FromRef<AppConfig> for Key {
-    fn from_ref(config: &AppConfig) -> Self {
+impl FromRef<ServiceConfig> for Key {
+    fn from_ref(config: &ServiceConfig) -> Self {
         let key: &[u8] = &config.session_secret_key;
         key.try_into().expect("invalid session secret key")
     }
 }
 
-impl AppConfig {
+impl ServiceConfig {
     pub fn build(self) -> Router {
         Router::new()
             .route("/", get(|| async { Redirect::permanent("./signin") }))
@@ -65,7 +65,7 @@ async fn front(jar: SignedCookieJar) -> impl IntoResponse {
 }
 
 async fn signin(
-    State(config): State<AppConfig>,
+    State(config): State<ServiceConfig>,
     uri: Uri,
     jar: SignedCookieJar,
     Form(form): Form<SignInForm>,
