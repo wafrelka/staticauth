@@ -81,9 +81,8 @@ async fn signin(
     Form(form): Form<SignInForm>,
 ) -> ResponseResult<Response> {
     let rd = match query.redirect_to {
-        Some(r) if r.is_empty() => "./auth".into(),
-        Some(r) => r,
-        None => "./auth".into(),
+        Some(r) if !r.is_empty() => r,
+        _ => "./auth".into(),
     };
     let rd = normalize_path(uri.path(), &rd).ok_or(StatusCode::BAD_REQUEST)?;
 
@@ -118,9 +117,8 @@ async fn signout(
     jar: SignedCookieJar,
 ) -> ResponseResult<Response> {
     let rd = match query.redirect_to {
-        Some(r) if r.is_empty() => "./signin".into(),
-        Some(r) => r,
-        None => "./signin".into(),
+        Some(r) if !r.is_empty() => r,
+        _ => "./signin".into(),
     };
     let rd = normalize_path(uri.path(), &rd).ok_or(StatusCode::BAD_REQUEST)?;
     let jar = jar.remove(Cookie::named(SESSION_COOKIE_NAME));
