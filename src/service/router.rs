@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use super::auth::verify_password;
 use super::redirection::normalize_path;
-use super::session::Session;
+use super::session::{Session, ValidationOptions};
 
 use axum::extract::{FromRef, Query, State};
 use axum::http::{StatusCode, Uri};
@@ -98,10 +98,7 @@ async fn signin(
 
     log::info!("user '{}' authenticated", form.username);
 
-    let session = Session {
-        subject: form.username,
-        expiration: Utc::now() + config.session_absolute_timeout,
-    };
+    let session = Session { subject: form.username, issued_at: Utc::now() };
     let jar = jar.add(session.to_cookie(SESSION_COOKIE_NAME));
     Ok((jar, Redirect::to(&rd)).into_response())
 }
@@ -126,11 +123,16 @@ async fn signout(
     Ok((jar, Redirect::to(&rd)).into_response())
 }
 
-async fn auth(jar: SignedCookieJar) -> ResponseResult<Response> {
+async fn auth(
+    State(config): State<ServiceConfig>,
+    jar: SignedCookieJar,
+) -> ResponseResult<Response> {
     let unauthorized = (StatusCode::UNAUTHORIZED, Json::from(json!({"error": "unauthorized"})));
     let cookie = jar.get(SESSION_COOKIE_NAME).ok_or(unauthorized.clone())?;
     let session = Session::from_cookie(cookie);
-    if !session.is_valid(None) {
+    let options =
+        ValidationOptions { now: None, absolute_timeout: config.session_absolute_timeout };
+    if !session.is_valid(options) {
         return Err(unauthorized.into());
     }
     let headers = [("X-Auth-Request-User", session.subject.clone())];
