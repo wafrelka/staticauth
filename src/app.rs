@@ -3,16 +3,23 @@ use std::path::PathBuf;
 use std::str::from_utf8;
 use std::time::Duration;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
+use tokio::io::{stdin, AsyncBufReadExt, BufReader};
 
-use crate::service::ServiceConfig;
+use crate::service::{hash_password, ServiceConfig};
 
 #[derive(Debug, Parser)]
 struct GenKeyArgs {
     #[clap(short, long)]
     output: Option<PathBuf>,
+}
+
+#[derive(Debug, Parser)]
+struct HashArgs {
+    #[clap(short, long)]
+    input: Option<PathBuf>,
 }
 
 #[derive(Debug, Parser)]
@@ -28,6 +35,7 @@ struct ServeArgs {
 #[derive(Debug, Subcommand)]
 enum Commands {
     GenKey(GenKeyArgs),
+    Hash(HashArgs),
     Serve(ServeArgs),
 }
 
@@ -130,6 +138,35 @@ impl GenKeyOptions {
     }
 }
 
+struct HashOptions {
+    input: Option<PathBuf>,
+}
+
+impl HashOptions {
+    async fn new(args: HashArgs, _setting: Setting) -> Result<Self> {
+        Ok(Self { input: args.input })
+    }
+
+    async fn run(self) -> Result<()> {
+        let input: String = match self.input {
+            Some(path) => tokio::fs::read_to_string(path)
+                .await
+                .context("could not read input file")?
+                .trim()
+                .to_owned(),
+            None => BufReader::new(stdin())
+                .lines()
+                .next_line()
+                .await
+                .context("could not read from stdin")?
+                .ok_or(anyhow!("empty line"))?,
+        };
+        let hash = hash_password(&input)?;
+        println!("{}", hash);
+        Ok(())
+    }
+}
+
 pub async fn run(args: Args) -> Result<()> {
     let setting: Setting = match args.config {
         Some(path) => {
@@ -142,6 +179,7 @@ pub async fn run(args: Args) -> Result<()> {
 
     match args.command {
         Commands::GenKey(a) => GenKeyOptions::new(a, setting).await?.run().await,
+        Commands::Hash(a) => HashOptions::new(a, setting).await?.run().await,
         Commands::Serve(a) => ServeOptions::new(a, setting).await?.run().await,
     }
 }
