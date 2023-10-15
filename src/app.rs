@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::service::ServiceConfig;
 
 #[derive(Debug, Parser)]
-struct GenerateArgs {
+struct GenKeyArgs {
     #[clap(short, long)]
     output: Option<PathBuf>,
 }
@@ -27,7 +27,7 @@ struct ServeArgs {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    Generate(GenerateArgs),
+    GenKey(GenKeyArgs),
     Serve(ServeArgs),
 }
 
@@ -105,12 +105,12 @@ impl ServeOptions {
     }
 }
 
-struct GenerateOptions {
+struct GenKeyOptions {
     output: Option<PathBuf>,
 }
 
-impl GenerateOptions {
-    async fn new(args: GenerateArgs, _setting: Setting) -> Result<Self> {
+impl GenKeyOptions {
+    async fn new(args: GenKeyArgs, _setting: Setting) -> Result<Self> {
         Ok(Self { output: args.output })
     }
 
@@ -141,7 +141,7 @@ pub async fn run(args: Args) -> Result<()> {
     };
 
     match args.command {
-        Commands::Generate(a) => GenerateOptions::new(a, setting).await?.run().await,
+        Commands::GenKey(a) => GenKeyOptions::new(a, setting).await?.run().await,
         Commands::Serve(a) => ServeOptions::new(a, setting).await?.run().await,
     }
 }
