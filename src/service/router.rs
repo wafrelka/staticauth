@@ -68,10 +68,9 @@ struct SignInQuery {
     redirect_to: Option<String>,
 }
 
-async fn front(jar: SignedCookieJar) -> impl IntoResponse {
-    let jar = jar.remove(Cookie::named(SESSION_COOKIE_NAME));
+async fn front() -> impl IntoResponse {
     let html = get_signin_html("".into());
-    (jar, Html::from(html))
+    Html::from(html)
 }
 
 async fn signin(
