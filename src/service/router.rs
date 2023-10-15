@@ -15,6 +15,7 @@ use chrono::Utc;
 use handlebars::Handlebars;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::json;
 
 const SESSION_COOKIE_NAME: &str = "session";
 const SIGNIN_HTML_TEMPLATE: &str = include_str!("../../resources/signin.html");
@@ -126,10 +127,11 @@ async fn signout(
 }
 
 async fn auth(jar: SignedCookieJar) -> ResponseResult<Response> {
-    let cookie = jar.get(SESSION_COOKIE_NAME).ok_or(StatusCode::UNAUTHORIZED)?;
+    let unauthorized = (StatusCode::UNAUTHORIZED, Json::from(json!({"error": "unauthorized"})));
+    let cookie = jar.get(SESSION_COOKIE_NAME).ok_or(unauthorized.clone())?;
     let session = Session::from_cookie(cookie);
     if !session.is_valid(None) {
-        return Err(StatusCode::UNAUTHORIZED.into());
+        return Err(unauthorized.into());
     }
     let headers = [("X-Auth-Request-User", session.subject.clone())];
     let resp = Json::from(session);
