@@ -49,6 +49,7 @@ impl ServiceConfig {
             .route("/signin", get(front).post(signin))
             .route("/signout", get(signout))
             .route("/auth", get(auth))
+            .fallback(|| async { (StatusCode::NOT_FOUND, "not found") })
             .with_state(self)
     }
 
