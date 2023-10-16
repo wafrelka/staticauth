@@ -48,7 +48,7 @@ impl ServiceConfig {
             .route("/", get(|| async { Redirect::permanent("./signin") }))
             .route("/signin", get(front).post(signin))
             .route("/signout", get(signout))
-            .route("/auth", get(auth))
+            .route("/userinfo", get(userinfo))
             .fallback(|| async { (StatusCode::NOT_FOUND, "not found") })
             .with_state(self)
     }
@@ -84,7 +84,7 @@ async fn signin(
 ) -> ResponseResult<Response> {
     let rd = match query.redirect_to {
         Some(r) if !r.is_empty() => r,
-        _ => "./auth".into(),
+        _ => "./userinfo".into(),
     };
     let rd = normalize_path(uri.path(), &rd).ok_or(StatusCode::BAD_REQUEST)?;
 
@@ -124,7 +124,7 @@ async fn signout(
     Ok((jar, Redirect::to(&rd)).into_response())
 }
 
-async fn auth(
+async fn userinfo(
     State(config): State<ServiceConfig>,
     jar: SignedCookieJar,
 ) -> ResponseResult<Response> {
