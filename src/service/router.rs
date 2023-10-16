@@ -128,13 +128,13 @@ async fn userinfo(
     State(config): State<ServiceConfig>,
     jar: SignedCookieJar,
 ) -> ResponseResult<Response> {
-    let unauthorized = (StatusCode::UNAUTHORIZED, Json::from(json!({"error": "unauthorized"})));
-    let cookie = jar.get(SESSION_COOKIE_NAME).ok_or(unauthorized.clone())?;
+    let unauthenticated = (StatusCode::FORBIDDEN, Json::from(json!({"error": "unauthenticated"})));
+    let cookie = jar.get(SESSION_COOKIE_NAME).ok_or(unauthenticated.clone())?;
     let session = Session::from_cookie(cookie);
     let options =
         ValidationOptions { now: None, absolute_timeout: config.session_absolute_timeout };
     if !session.is_valid(options) {
-        return Err(unauthorized.into());
+        return Err(unauthenticated.into());
     }
     let headers = [("X-Request-User", session.subject.clone())];
     let resp = Json::from(session);
