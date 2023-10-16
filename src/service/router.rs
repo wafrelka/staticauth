@@ -136,7 +136,7 @@ async fn userinfo(
     if !session.is_valid(options) {
         return Err(unauthorized.into());
     }
-    let headers = [("X-Auth-Request-User", session.subject.clone())];
+    let headers = [("X-Request-User", session.subject.clone())];
     let resp = Json::from(session);
     Ok((headers, resp).into_response())
 }
