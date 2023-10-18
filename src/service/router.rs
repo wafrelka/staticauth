@@ -8,7 +8,7 @@ use super::session::{Session, ValidationOptions};
 use axum::extract::{FromRef, Query, State};
 use axum::http::{StatusCode, Uri};
 use axum::response::{Html, IntoResponse, Redirect, Response, Result as ResponseResult};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Form, Json, Router};
 use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
 use chrono::Utc;
@@ -48,6 +48,7 @@ impl ServiceConfig {
             .route("/", get(|| async { Redirect::permanent("./signin") }))
             .route("/signin", get(front).post(signin))
             .route("/signout", get(signout))
+            .route("/authenticate", post(authenticate))
             .route("/userinfo", get(userinfo))
             .fallback(|| async { (StatusCode::NOT_FOUND, "not found") })
             .with_state(self)
@@ -122,6 +123,43 @@ async fn signout(
     let rd = normalize_path(uri.path(), &rd).ok_or(StatusCode::BAD_REQUEST)?;
     let jar = jar.remove(Cookie::named(SESSION_COOKIE_NAME));
     Ok((jar, Redirect::to(&rd)).into_response())
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AuthenticateRequest {
+    username: String,
+    password: String,
+    redirect_to: Option<String>,
+}
+
+async fn authenticate(
+    State(config): State<ServiceConfig>,
+    uri: Uri,
+    jar: SignedCookieJar,
+    Json(req): Json<AuthenticateRequest>,
+) -> ResponseResult<Response> {
+    let rd = match req.redirect_to {
+        Some(r) if !r.is_empty() => r,
+        _ => "./userinfo".into(),
+    };
+    let rd = normalize_path(uri.path(), &rd)
+        .ok_or((StatusCode::BAD_REQUEST, Json::from(json!({"error": "invalid_redirect"}))))?;
+
+    let ok = verify_password(config.users, &req.username, &req.password).map_err(|err| {
+        log::error!("password verification error: {}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    if !ok {
+        return Err(
+            (StatusCode::FORBIDDEN, Json::from(json!({ "error": "invalid_credential" }))).into()
+        );
+    }
+
+    log::info!("user '{}' authenticated", req.username);
+
+    let session = Session { subject: req.username, issued_at: Utc::now() };
+    let jar = jar.add(session.to_cookie(SESSION_COOKIE_NAME));
+    Ok((jar, Json::from(json!({"redirect_to": rd, "username": session.subject}))).into_response())
 }
 
 async fn userinfo(
