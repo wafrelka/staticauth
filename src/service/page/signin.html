@@ -4,24 +4,76 @@
         <title>Sign In</title>
     </head>
     <body>
-        <form method="post">
+        <form method="post" id="form">
             <input type="text" name="username" id="username" required />
             <input type="password" name="password" id="password" required />
             <input type="submit" />
         </form>
-        <div id="error"></div>
+        <div id="error"><p id="error-message"></p></div>
     </body>
     <script>
-        const errorMsgs = new Map([
-            ["invalid_credential", "invalid username or password"],
-        ]);
-        const error = "{{error}}";
-        document.addEventListener("DOMContentLoaded", () => {
-            if(error && errorMsgs.get(error)) {
-                const msg = errorMsgs.get(error);
-                const elem = document.getElementById("error");
-                elem.textContent = msg;
+        const formatError = (error) => {
+            if(error instanceof Error) {
+                return error.message;
             }
+            const messages = new Map([
+                ["invalid_credential", "invalid username or password"],
+                ["invalid_redirect", "invalid redirect destination"],
+            ]);
+            return messages.get(error) ?? error;
+        };
+
+        let state = { status: "READY", error: undefined };
+        const update = (newState) => {
+            state = {...state, ...newState};
+            const { status, error } = state;
+            console.log("state:", state);
+            const errElem = document.getElementById("error");
+            const errMsgElem = document.getElementById("error-message");
+            errElem.style.visibility = (status == "ERROR" ? "visible" : "hidden");
+            errMsgElem.textContent = (status == "ERROR" ? formatError(error) : "");
+        }
+
+        const authenticate = async (data) => {
+            const body = JSON.stringify(data);
+            const headers = {"Content-Type": "application/json"};
+            const resp = await fetch("./authenticate", {method: "POST", body, headers });
+            const payload = await resp.json();
+            if(!resp.ok) {
+                throw payload.error;
+            }
+            return payload.redirect_to;
+        };
+
+        const submit = async (data) => {
+            update({status: "LOADING"});
+            try {
+                const redirectTo = await authenticate(data);
+                update({status: "READY", error: undefined});
+                window.location = redirectTo;
+            } catch(error) {
+                update({status: "ERROR", error});
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            let error = "{{error}}";
+            update(error ? {status: "ERROR", error} : {});
+
+            const formElem = document.getElementById("form");
+            formElem.addEventListener("submit", (event) => {
+                event.preventDefault();
+                if(state.status === "LOADING") {
+                    return;
+                }
+                const form = new FormData(event.target);
+                const data = {
+                    username: form.get("username"),
+                    password: form.get("password"),
+                    redirect_to: new URLSearchParams(window.location.search).get("rd"),
+                };
+                submit(data);
+            });
         });
     </script>
 </html>
