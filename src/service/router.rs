@@ -112,7 +112,7 @@ async fn signin(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     if !ok {
-        let html = get_signin_html("invalid_username_password");
+        let html = get_signin_html("invalid_credential");
         return Err((StatusCode::FORBIDDEN, html).into());
     }
 
