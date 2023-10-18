@@ -50,6 +50,34 @@ impl ServiceConfig {
     }
 }
 
+enum JsonError {
+    InvalidCredential,
+    InvalidRedirect,
+    Unauthenticated,
+    InternalError,
+}
+
+impl IntoResponse for JsonError {
+    fn into_response(self) -> axum::response::Response {
+        use JsonError::*;
+        let resp = match self {
+            InvalidCredential => {
+                (StatusCode::FORBIDDEN, Json::from(json!({"error": "invalid_credential"})))
+            }
+            InvalidRedirect => {
+                (StatusCode::BAD_REQUEST, Json::from(json!({"error": "invalid_redirect"})))
+            }
+            Unauthenticated => {
+                (StatusCode::FORBIDDEN, Json::from(json!({"error": "unauthenticated"})))
+            }
+            InternalError => {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json::from(json!({"error": "internal_error"})))
+            }
+        };
+        resp.into_response()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct SignInForm {
     username: String,
@@ -132,17 +160,14 @@ async fn authenticate(
         Some(r) if !r.is_empty() => r,
         _ => "./userinfo".into(),
     };
-    let rd = normalize_path(uri.path(), &rd)
-        .ok_or((StatusCode::BAD_REQUEST, Json::from(json!({"error": "invalid_redirect"}))))?;
+    let rd = normalize_path(uri.path(), &rd).ok_or(JsonError::InvalidRedirect)?;
 
     let ok = verify_password(config.users, &req.username, &req.password).map_err(|err| {
         log::error!("password verification error: {}", err);
-        StatusCode::INTERNAL_SERVER_ERROR
+        JsonError::InternalError
     })?;
     if !ok {
-        return Err(
-            (StatusCode::FORBIDDEN, Json::from(json!({ "error": "invalid_credential" }))).into()
-        );
+        return Err(JsonError::InvalidCredential.into());
     }
 
     log::info!("user '{}' authenticated", req.username);
@@ -156,13 +181,12 @@ async fn userinfo(
     State(config): State<ServiceConfig>,
     jar: SignedCookieJar,
 ) -> AxumResult<impl IntoResponse> {
-    let unauthenticated = (StatusCode::FORBIDDEN, Json::from(json!({"error": "unauthenticated"})));
-    let cookie = jar.get(SESSION_COOKIE_NAME).ok_or(unauthenticated.clone())?;
+    let cookie = jar.get(SESSION_COOKIE_NAME).ok_or(JsonError::Unauthenticated)?;
     let session = Session::from_cookie(cookie);
     let options =
         ValidationOptions { now: None, absolute_timeout: config.session_absolute_timeout };
     if !session.is_valid(options) {
-        return Err(unauthenticated.into());
+        return Err(JsonError::Unauthenticated.into());
     }
     let headers = [("X-Request-User", session.subject.clone())];
     let resp = Json::from(session);
