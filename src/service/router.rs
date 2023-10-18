@@ -78,6 +78,10 @@ impl IntoResponse for JsonError {
     }
 }
 
+async fn front() -> impl IntoResponse {
+    get_signin_html("")
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct SignInForm {
     username: String,
@@ -88,10 +92,6 @@ struct SignInForm {
 struct SignInQuery {
     #[serde(rename = "rd")]
     redirect_to: Option<String>,
-}
-
-async fn front() -> impl IntoResponse {
-    get_signin_html("")
 }
 
 async fn signin(
