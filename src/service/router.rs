@@ -8,7 +8,8 @@ use super::session::{Session, ValidationOptions};
 
 use axum::extract::{FromRef, Query, State};
 use axum::http::{StatusCode, Uri};
-use axum::response::{IntoResponse, Redirect, Response, Result as ResponseResult};
+use axum::response::Result as AxumResult;
+use axum::response::{IntoResponse, Redirect};
 use axum::routing::{get, post};
 use axum::{Form, Json, Router};
 use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
@@ -71,7 +72,7 @@ async fn signin(
     jar: SignedCookieJar,
     Query(query): Query<SignInQuery>,
     Form(form): Form<SignInForm>,
-) -> ResponseResult<Response> {
+) -> AxumResult<impl IntoResponse> {
     let rd = match query.redirect_to {
         Some(r) if !r.is_empty() => r,
         _ => "./userinfo".into(),
@@ -91,7 +92,7 @@ async fn signin(
 
     let session = Session { subject: form.username, issued_at: Utc::now() };
     let jar = jar.add(session.to_cookie(SESSION_COOKIE_NAME));
-    Ok((jar, Redirect::to(&rd)).into_response())
+    Ok((jar, Redirect::to(&rd)))
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -104,14 +105,14 @@ async fn signout(
     uri: Uri,
     Query(query): Query<SignOutQuery>,
     jar: SignedCookieJar,
-) -> ResponseResult<Response> {
+) -> AxumResult<impl IntoResponse> {
     let rd = match query.redirect_to {
         Some(r) if !r.is_empty() => r,
         _ => "./signin".into(),
     };
     let rd = normalize_path(uri.path(), &rd).ok_or(StatusCode::BAD_REQUEST)?;
     let jar = jar.remove(Cookie::named(SESSION_COOKIE_NAME));
-    Ok((jar, Redirect::to(&rd)).into_response())
+    Ok((jar, Redirect::to(&rd)))
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -126,7 +127,7 @@ async fn authenticate(
     uri: Uri,
     jar: SignedCookieJar,
     Json(req): Json<AuthenticateRequest>,
-) -> ResponseResult<Response> {
+) -> AxumResult<impl IntoResponse> {
     let rd = match req.redirect_to {
         Some(r) if !r.is_empty() => r,
         _ => "./userinfo".into(),
@@ -148,13 +149,13 @@ async fn authenticate(
 
     let session = Session { subject: req.username, issued_at: Utc::now() };
     let jar = jar.add(session.to_cookie(SESSION_COOKIE_NAME));
-    Ok((jar, Json::from(json!({"redirect_to": rd, "username": session.subject}))).into_response())
+    Ok((jar, Json::from(json!({"redirect_to": rd, "username": session.subject}))))
 }
 
 async fn userinfo(
     State(config): State<ServiceConfig>,
     jar: SignedCookieJar,
-) -> ResponseResult<Response> {
+) -> AxumResult<impl IntoResponse> {
     let unauthenticated = (StatusCode::FORBIDDEN, Json::from(json!({"error": "unauthenticated"})));
     let cookie = jar.get(SESSION_COOKIE_NAME).ok_or(unauthenticated.clone())?;
     let session = Session::from_cookie(cookie);
@@ -165,5 +166,5 @@ async fn userinfo(
     }
     let headers = [("X-Request-User", session.subject.clone())];
     let resp = Json::from(session);
-    Ok((headers, resp).into_response())
+    Ok((headers, resp))
 }
