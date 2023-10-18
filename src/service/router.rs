@@ -2,31 +2,21 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use super::auth::verify_password;
+use super::page::get_signin_html;
 use super::redirection::normalize_path;
 use super::session::{Session, ValidationOptions};
 
 use axum::extract::{FromRef, Query, State};
 use axum::http::{StatusCode, Uri};
-use axum::response::{Html, IntoResponse, Redirect, Response, Result as ResponseResult};
+use axum::response::{IntoResponse, Redirect, Response, Result as ResponseResult};
 use axum::routing::{get, post};
 use axum::{Form, Json, Router};
 use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
 use chrono::Utc;
-use handlebars::Handlebars;
 use serde::Deserialize;
-use serde::Serialize;
 use serde_json::json;
 
 const SESSION_COOKIE_NAME: &str = "session";
-const SIGNIN_HTML_TEMPLATE: &str = include_str!("../../resources/signin.html");
-
-fn get_signin_html(error: String) -> String {
-    #[derive(Serialize)]
-    struct Context {
-        error: String,
-    }
-    Handlebars::new().render_template(SIGNIN_HTML_TEMPLATE, &Context { error }).unwrap()
-}
 
 #[derive(Debug, Clone)]
 pub struct ServiceConfig {
@@ -72,8 +62,7 @@ struct SignInQuery {
 }
 
 async fn front() -> impl IntoResponse {
-    let html = get_signin_html("".into());
-    Html::from(html)
+    get_signin_html("")
 }
 
 async fn signin(
@@ -94,8 +83,8 @@ async fn signin(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     if !ok {
-        let html = get_signin_html("invalid_username_password".into());
-        return Err((StatusCode::FORBIDDEN, Html::from(html)).into());
+        let html = get_signin_html("invalid_username_password");
+        return Err((StatusCode::FORBIDDEN, html).into());
     }
 
     log::info!("user '{}' authenticated", form.username);
