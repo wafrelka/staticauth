@@ -2,14 +2,184 @@
 <html>
     <head>
         <title>Sign In</title>
+        <meta name="viewport" content="width=device-width" />
+        <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+        <style>
+            :root {
+                font-family: sans-serif;
+                --font-ui: 'Rubik';
+                --color-primary: #6d9dc5;
+                --color-primary-variant: #81aece;
+                --color-primary-text: #2f3336;
+                --color-base: #ffffff0c;
+                --color-base-text: #9d9fa0;
+                --color-base-text-variant: #f3f5f7;
+                --color-error: #e2617b;
+                --color-back: #2a2e31;
+            }
+            body {
+                width: 100dvw;
+                height: 100dvh;
+                margin: 0;
+                padding: 0;
+            }
+            #container {
+                display: grid;
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr;
+                place-items: center;
+                width: 100%;
+                height: 100%;
+                background-color: var(--color-back);
+            }
+            #content {
+                box-sizing: border-box;
+                display: grid;
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr;
+                place-items: center;
+                width: 100%;
+                height: 100%;
+                padding: 0 2rem;
+                color: var(--color-base-text);
+                background-color: var(--color-base);
+            }
+            @media not screen and (max-width: 600px) {
+                #content {
+                    max-width: 32rem;
+                    max-height: 26rem;
+                    border-radius: 0.5rem;
+                }
+            }
+            #form {
+                width: 100%;
+                margin-top: 3rem;
+                font-family: var(--font-ui), sans-serif;
+            }
+            #username, #password, #submit {
+                width: 100%;
+            }
+            input, button {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+                border: none;
+                border-radius: 0;
+                background: none;
+                appearance: none;
+                outline: none;
+                font-family: sans-serif;
+            }
+            #form input, #form button {
+                width: 100%;
+            }
+            .textbox {
+                border-bottom: var(--color-base-text) solid 0.1rem;
+            }
+            .textbox:focus-within {
+                border-bottom: var(--color-primary-variant) solid 0.1rem;
+                color: var(--color-primary-variant);
+            }
+            .textbox label {
+                margin-left: 0.1rem;
+                font-size: 0.8rem;
+            }
+            .textbox input {
+                height: 2.2rem;
+                padding: 0 0.3rem;
+                font-size: 1.3rem;
+                color: var(--color-base-text-variant);
+            }
+            #password {
+                margin-top: 0.8rem;
+            }
+            #submit {
+                margin-top: 1.6rem;
+            }
+            #submit button {
+                width: 100%;
+                padding: 0.6rem 0;
+                border-radius: 0.3rem;
+                font-size: 1.3rem;
+                font-family: var(--font-ui), sans-serif;
+                font-weight: 500;
+                color: var(--color-primary-text);
+                background-color: var(--color-primary);
+            }
+            @media (any-hover: hover) {
+                #form:not(.loading) #submit:hover button {
+                    background-color: var(--color-primary-variant);
+                    cursor: pointer;
+                }
+            }
+            #form.loading #submit button {
+                opacity: 0.5;
+            }
+            #submit .loader {
+                box-sizing: border-box;
+                visibility: hidden;
+                display: inline-block;
+                position: relative;
+                top: 0.1rem;
+                left: 0.4rem;
+                width: 1rem;
+                height: 1rem;
+                border: 0.15rem solid transparent;
+                border-radius: 50%;
+                border-bottom-color: var(--color-primary-text);
+                animation: rotation 1s linear infinite;
+            }
+            #form.loading .loader {
+                visibility: visible;
+            }
+            @keyframes rotation {
+                0% {
+                    transform: rotate(0deg);
+                }
+                100% {
+                    transform: rotate(360deg);
+                }
+            }
+            #error {
+                visibility: hidden;
+                height: 4rem;
+                margin-top: 1.6rem;
+                font-size: 1rem;
+                color: var(--color-error);
+            }
+            #error.shown {
+                visibility: visible;
+            }
+            #error .material-icons {
+                margin-right: 0.2rem;
+                vertical-align: -0.2rem;
+                font-size: 1.2rem;
+                color: var(--color-error);
+            }
+        </style>
     </head>
     <body>
-        <form method="post" id="form">
-            <input type="text" name="username" id="username" required />
-            <input type="password" name="password" id="password" required />
-            <input type="submit" />
-        </form>
-        <div id="error"><p id="error-message"></p></div>
+        <div id="container">
+            <div id="content">
+                <form method="post" id="form">
+                    <div class="textbox" id="username">
+                        <label for="username">username</label>
+                        <input type="text" name="username" required />
+                    </div>
+                    <div class="textbox" id="password">
+                        <label for="password">password</label>
+                        <input type="password" name="password" required />
+                    </div>
+                    <div id="submit">
+                        <button type="submit">Sign In<span class="loader"></span></button>
+                    </div>
+                    <div id="error">
+                        <span class="material-icons md-dark">error_outline</span><span id="error-message"></span>
+                    </div>
+                </form>
+            </div>
+        </div>
     </body>
     <script>
         const formatError = (error) => {
@@ -23,15 +193,27 @@
             return messages.get(error) ?? error;
         };
 
+        const updateClass = (elem, name, included) => {
+            if(included) {
+                elem.classList.add(name);
+            } else {
+                elem.classList.remove(name);
+            }
+        };
+
         let state = { status: "READY", error: undefined };
         const update = (newState) => {
             state = {...state, ...newState};
             const { status, error } = state;
             console.log("state:", state);
             const errElem = document.getElementById("error");
+            updateClass(errElem, "shown", status === "ERROR");
             const errMsgElem = document.getElementById("error-message");
-            errElem.style.visibility = (status == "ERROR" ? "visible" : "hidden");
             errMsgElem.textContent = (status == "ERROR" ? formatError(error) : "");
+            const formElem = document.getElementById("form");
+            updateClass(formElem, "loading", status === "LOADING");
+            const submitButtonElem = document.querySelector("#submit button");
+            submitButtonElem.disabled = status === "LOADING";
         }
 
         const authenticate = async (data) => {
