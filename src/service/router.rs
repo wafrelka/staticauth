@@ -7,11 +7,12 @@ use super::redirection::normalize_path;
 use super::session::{Session, ValidationOptions};
 
 use axum::extract::{FromRef, Query, State};
+use axum::headers::{Host, Origin};
 use axum::http::{StatusCode, Uri};
 use axum::response::Result as AxumResult;
 use axum::response::{IntoResponse, Redirect};
 use axum::routing::{get, post};
-use axum::{Form, Json, Router};
+use axum::{Form, Json, Router, TypedHeader};
 use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
 use chrono::Utc;
 use serde::Deserialize;
@@ -52,6 +53,7 @@ impl ServiceConfig {
 
 enum JsonError {
     InvalidCredential,
+    InvalidOrigin,
     InvalidRedirect,
     Unauthenticated,
     InternalError,
@@ -63,6 +65,9 @@ impl IntoResponse for JsonError {
         let resp = match self {
             InvalidCredential => {
                 (StatusCode::FORBIDDEN, Json::from(json!({"error": "invalid_credential"})))
+            }
+            InvalidOrigin => {
+                (StatusCode::BAD_REQUEST, Json::from(json!({"error": "invalid_origin"})))
             }
             InvalidRedirect => {
                 (StatusCode::BAD_REQUEST, Json::from(json!({"error": "invalid_redirect"})))
@@ -76,6 +81,14 @@ impl IntoResponse for JsonError {
         };
         resp.into_response()
     }
+}
+
+fn check_origin(origin: Origin, host: Host) -> bool {
+    let origin_host = match origin.port() {
+        Some(p) => format!("{}:{}", origin.hostname(), p),
+        None => origin.hostname().to_owned(),
+    };
+    origin_host == host.to_string()
 }
 
 async fn front() -> impl IntoResponse {
@@ -99,8 +112,14 @@ async fn signin(
     uri: Uri,
     jar: SignedCookieJar,
     Query(query): Query<SignInQuery>,
+    TypedHeader(origin): TypedHeader<Origin>,
+    TypedHeader(host): TypedHeader<Host>,
     Form(form): Form<SignInForm>,
 ) -> AxumResult<impl IntoResponse> {
+    if !check_origin(origin, host) {
+        return Err(StatusCode::BAD_REQUEST.into());
+    }
+
     let rd = match query.redirect_to {
         Some(r) if !r.is_empty() => r,
         _ => "./userinfo".into(),
@@ -154,8 +173,14 @@ async fn authenticate(
     State(config): State<ServiceConfig>,
     uri: Uri,
     jar: SignedCookieJar,
+    TypedHeader(origin): TypedHeader<Origin>,
+    TypedHeader(host): TypedHeader<Host>,
     Json(req): Json<AuthenticateRequest>,
 ) -> AxumResult<impl IntoResponse> {
+    if !check_origin(origin, host) {
+        return Err(JsonError::InvalidOrigin.into());
+    }
+
     let rd = match req.redirect_to {
         Some(r) if !r.is_empty() => r,
         _ => "./userinfo".into(),

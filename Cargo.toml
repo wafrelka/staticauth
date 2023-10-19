@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.75"
 argon2 = "0.5.2"
-axum = { version = "0.6.20", features = ["form", "query"] }
+axum = { version = "0.6.20", features = ["form", "query", "headers"] }
 axum-extra = { version = "0.8.0", features = ["cookie-signed"] }
 chrono = { version = "0.4.31", features = ["serde", "clock"] }
 clap = { version = "4.4.6", features = ["derive"] }
