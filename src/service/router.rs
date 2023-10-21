@@ -64,7 +64,7 @@ impl IntoResponse for JsonError {
         use JsonError::*;
         let resp = match self {
             InvalidCredential => {
-                (StatusCode::FORBIDDEN, Json::from(json!({"error": "invalid_credential"})))
+                (StatusCode::BAD_REQUEST, Json::from(json!({"error": "invalid_credential"})))
             }
             InvalidOrigin => {
                 (StatusCode::BAD_REQUEST, Json::from(json!({"error": "invalid_origin"})))
@@ -132,7 +132,7 @@ async fn signin(
     })?;
     if !ok {
         let html = get_signin_html("invalid_credential");
-        return Err((StatusCode::FORBIDDEN, html).into());
+        return Err((StatusCode::BAD_REQUEST, html).into());
     }
 
     log::info!("user '{}' authenticated", form.username);
