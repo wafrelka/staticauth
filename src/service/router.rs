@@ -12,7 +12,7 @@ use axum::http::{StatusCode, Uri};
 use axum::response::Result as AxumResult;
 use axum::response::{IntoResponse, Redirect};
 use axum::routing::{get, post};
-use axum::{Form, Json, Router, TypedHeader};
+use axum::{Json, Router, TypedHeader};
 use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
 use chrono::Utc;
 use serde::Deserialize;
@@ -38,7 +38,7 @@ impl ServiceConfig {
     pub fn build(self) -> Router {
         Router::new()
             .route("/", get(|| async { Redirect::permanent("./signin") }))
-            .route("/signin", get(front).post(signin))
+            .route("/signin", get(signin))
             .route("/signout", get(signout))
             .route("/authenticate", post(authenticate))
             .route("/userinfo", get(userinfo))
@@ -91,55 +91,8 @@ fn check_origin(origin: Origin, host: Host) -> bool {
     origin_host == host.to_string()
 }
 
-async fn front() -> impl IntoResponse {
-    get_signin_html("")
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct SignInForm {
-    username: String,
-    password: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct SignInQuery {
-    #[serde(rename = "rd")]
-    redirect_to: Option<String>,
-}
-
-async fn signin(
-    State(config): State<ServiceConfig>,
-    uri: Uri,
-    jar: SignedCookieJar,
-    Query(query): Query<SignInQuery>,
-    TypedHeader(origin): TypedHeader<Origin>,
-    TypedHeader(host): TypedHeader<Host>,
-    Form(form): Form<SignInForm>,
-) -> AxumResult<impl IntoResponse> {
-    if !check_origin(origin, host) {
-        return Err(StatusCode::BAD_REQUEST.into());
-    }
-
-    let rd = match query.redirect_to {
-        Some(r) if !r.is_empty() => r,
-        _ => "./userinfo".into(),
-    };
-    let rd = normalize_path(uri.path(), &rd).ok_or(StatusCode::BAD_REQUEST)?;
-
-    let ok = verify_password(config.users, &form.username, &form.password).map_err(|err| {
-        log::error!("password verification error: {}", err);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    if !ok {
-        let html = get_signin_html("invalid_credential");
-        return Err((StatusCode::BAD_REQUEST, html).into());
-    }
-
-    log::info!("user '{}' authenticated", form.username);
-
-    let session = Session { subject: form.username, issued_at: Utc::now() };
-    let jar = jar.add(session.to_cookie(SESSION_COOKIE_NAME));
-    Ok((jar, Redirect::to(&rd)))
+async fn signin() -> impl IntoResponse {
+    get_signin_html()
 }
 
 #[derive(Debug, Clone, Deserialize)]
