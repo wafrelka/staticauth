@@ -28,6 +28,7 @@ impl Session {
     pub fn to_cookie<'a>(&self, name: &'a str) -> Cookie<'a> {
         let value = serde_json::to_string(&self).expect("could not serialize session");
         let mut cookie = Cookie::new(name, value);
+        cookie.set_path("/");
         cookie.set_http_only(true);
         cookie.set_same_site(SameSite::Strict);
         cookie
