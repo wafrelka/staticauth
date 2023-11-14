@@ -201,6 +201,7 @@
             const messages = new Map([
                 ["invalid_credential", "invalid username or password"],
                 ["invalid_redirect", "invalid redirect destination"],
+                ["invalid_origin", "CSRF check failed"],
             ]);
             return messages.get(error) ?? error;
         };
