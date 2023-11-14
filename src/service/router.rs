@@ -73,7 +73,7 @@ impl IntoResponse for JsonError {
                 (StatusCode::BAD_REQUEST, Json::from(json!({"error": "invalid_redirect"})))
             }
             Unauthenticated => {
-                (StatusCode::FORBIDDEN, Json::from(json!({"error": "unauthenticated"})))
+                (StatusCode::UNAUTHORIZED, Json::from(json!({"error": "unauthenticated"})))
             }
             InternalError => {
                 (StatusCode::INTERNAL_SERVER_ERROR, Json::from(json!({"error": "internal_error"})))
