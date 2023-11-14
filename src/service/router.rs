@@ -84,11 +84,7 @@ impl IntoResponse for JsonError {
 }
 
 fn check_origin(origin: &Origin, host: &Host) -> bool {
-    let origin_host = match origin.port() {
-        Some(p) => format!("{}:{}", origin.hostname(), p),
-        None => origin.hostname().to_owned(),
-    };
-    origin_host == host.to_string()
+    origin.hostname() == host.hostname() && origin.port() == host.port()
 }
 
 async fn signin() -> impl IntoResponse {
