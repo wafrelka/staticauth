@@ -83,7 +83,7 @@ impl IntoResponse for JsonError {
     }
 }
 
-fn check_origin(origin: Origin, host: Host) -> bool {
+fn check_origin(origin: &Origin, host: &Host) -> bool {
     let origin_host = match origin.port() {
         Some(p) => format!("{}:{}", origin.hostname(), p),
         None => origin.hostname().to_owned(),
@@ -130,7 +130,8 @@ async fn authenticate(
     TypedHeader(host): TypedHeader<Host>,
     Json(req): Json<AuthenticateRequest>,
 ) -> AxumResult<impl IntoResponse> {
-    if !check_origin(origin, host) {
+    if !check_origin(&origin, &host) {
+        log::debug!("invalid origin: origin = '{}', host = '{}'", origin, host);
         return Err(JsonError::InvalidOrigin.into());
     }
 
