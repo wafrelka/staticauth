@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use super::auth::verify_password;
+use super::headers::X_AUTH_REQUEST_USER;
 use super::page::get_signin_html;
 use super::redirection::normalize_path;
 use super::session::{Session, ValidationOptions};
@@ -165,7 +166,7 @@ async fn userinfo(
     if !session.is_valid(options) {
         return Err(JsonError::Unauthenticated.into());
     }
-    let headers = [("X-Request-User", session.subject.clone())];
+    let headers = [(X_AUTH_REQUEST_USER, session.subject.clone())];
     let resp = Json::from(session);
     Ok((headers, resp))
 }
