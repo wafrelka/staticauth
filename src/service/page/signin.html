@@ -239,7 +239,7 @@
             try {
                 const redirectTo = await authenticate(data);
                 update({status: "READY", error: undefined});
-                window.location = redirectTo;
+                window.location = redirectTo + window.location.hash;
             } catch(error) {
                 update({status: "ERROR", error});
             }
