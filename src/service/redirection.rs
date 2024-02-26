@@ -7,6 +7,13 @@ pub fn normalize_path(base: &str, path: &str) -> Option<String> {
     host.make_relative(&full_path).map(|r| format!("/{}", r))
 }
 
+pub fn add_query_to_path(path: &str, key: &str, value: &str) -> Option<String> {
+    let host = Url::parse("http://localhost").unwrap();
+    let mut full_path = host.join(path).ok()?;
+    full_path.query_pairs_mut().append_pair(key, value);
+    host.make_relative(&full_path).map(|r| format!("/{}", r))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -53,6 +60,38 @@ mod tests {
         let path = "https://example.com/x/y/z";
         let expected = None;
         let actual = normalize_path(base, path);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_add_query_to_path_basic() {
+        let path = "/a/b/c";
+        let expected = Some("/a/b/c?key=value".into());
+        let actual = add_query_to_path(path, "key", "value");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_add_query_to_path_existing_query_params() {
+        let path = "/a/b/c?extrakey=extravalue";
+        let expected = Some("/a/b/c?extrakey=extravalue&key=value".into());
+        let actual = add_query_to_path(path, "key", "value");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_add_query_to_path_special_value() {
+        let path = "/a/b/c";
+        let expected = Some("/a/b/c?key=value%2F%21%3F".into());
+        let actual = add_query_to_path(path, "key", "value/!?");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_add_query_to_path_utf8() {
+        let path = "/a/b/c";
+        let expected = Some("/a/b/c?key=%E3%81%82".into());
+        let actual = add_query_to_path(path, "key", "あ");
         assert_eq!(expected, actual);
     }
 }

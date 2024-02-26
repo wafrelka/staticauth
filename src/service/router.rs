@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use super::auth::verify_password;
-use super::headers::X_AUTH_REQUEST_USER;
+use super::headers::{X_AUTH_REQUEST_REDIRECT, X_AUTH_REQUEST_USER};
 use super::page::get_signin_html;
-use super::redirection::normalize_path;
+use super::redirection::{add_query_to_path, normalize_path};
 use super::session::{Session, ValidationOptions};
 
 use axum::extract::{FromRef, Query, State};
 use axum::headers::{Host, Origin};
-use axum::http::{StatusCode, Uri};
+use axum::http::{HeaderMap, StatusCode, Uri};
 use axum::response::Result as AxumResult;
 use axum::response::{IntoResponse, Redirect};
 use axum::routing::{get, post};
@@ -88,8 +88,15 @@ fn check_origin(origin: &Origin, host: &Host) -> bool {
     origin.hostname() == host.hostname() && origin.port() == host.port()
 }
 
-async fn signin() -> impl IntoResponse {
-    get_signin_html()
+async fn signin(uri: Uri, headers: HeaderMap) -> AxumResult<impl IntoResponse> {
+    if let Some(redirect_header) = headers.get(X_AUTH_REQUEST_REDIRECT) {
+        let rd = redirect_header.to_str().ok().ok_or(StatusCode::BAD_REQUEST)?;
+        let rd = normalize_path(uri.path(), rd).ok_or(StatusCode::BAD_REQUEST)?;
+        let signin_redirect =
+            add_query_to_path(uri.path(), "rd", &rd).ok_or(StatusCode::BAD_REQUEST)?;
+        return Ok(Redirect::to(&signin_redirect).into_response());
+    }
+    Ok(get_signin_html().into_response())
 }
 
 #[derive(Debug, Clone, Deserialize)]
