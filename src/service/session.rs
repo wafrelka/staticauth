@@ -31,6 +31,7 @@ impl Session {
         cookie.set_path("/");
         cookie.set_http_only(true);
         cookie.set_same_site(SameSite::Strict);
+        cookie.set_secure(true);
         cookie
     }
 

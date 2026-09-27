@@ -153,9 +153,7 @@ async fn signout(
         _ => "./signin".into(),
     };
     let rd = normalize_path(uri.path(), &rd).ok_or(StatusCode::BAD_REQUEST)?;
-    let mut cookie = Cookie::named(SESSION_COOKIE_NAME);
-    cookie.set_path("/");
-    let jar = jar.remove(cookie);
+    let jar = jar.remove(Cookie::named(SESSION_COOKIE_NAME));
     Ok((jar, Redirect::to(&rd)))
 }
 
