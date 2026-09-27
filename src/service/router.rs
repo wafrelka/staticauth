@@ -113,8 +113,21 @@ fn unauthenticated_response(uri: &Uri, headers: &HeaderMap) -> Result<Response, 
     Ok(no_store(Redirect::to(&location)))
 }
 
-async fn signin(uri: Uri, headers: HeaderMap) -> AxumResult<impl IntoResponse> {
-    if let Some(redirect_header) = headers.get(X_AUTH_REQUEST_REDIRECT) {
+#[derive(Debug, Clone, Deserialize)]
+struct SignInQuery {
+    #[serde(rename = "rd")]
+    redirect_to: Option<String>,
+}
+
+async fn signin(
+    uri: Uri,
+    headers: HeaderMap,
+    Query(query): Query<SignInQuery>,
+) -> AxumResult<impl IntoResponse> {
+    if query.redirect_to.is_none() {
+        let Some(redirect_header) = headers.get(X_AUTH_REQUEST_REDIRECT) else {
+            return Ok(get_signin_html().into_response());
+        };
         let rd = redirect_header.to_str().ok().ok_or(StatusCode::BAD_REQUEST)?;
         let rd = normalize_path(uri.path(), rd).ok_or(StatusCode::BAD_REQUEST)?;
         let signin_redirect =
@@ -210,6 +223,34 @@ async fn userinfo(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn test_signin_redirects_from_redirect_header_without_redirect_query() {
+        let uri = Uri::from_static("/signin");
+        let mut headers = HeaderMap::new();
+        headers.insert(X_AUTH_REQUEST_REDIRECT, HeaderValue::from_static("/private?page=1"));
+        let query = Query::<SignInQuery>::try_from_uri(&uri).unwrap();
+
+        let response = signin(uri, headers.clone(), query).await.unwrap().into_response();
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            response.headers().get(header::LOCATION).unwrap(),
+            "/signin?rd=%2Fprivate%3Fpage%3D1"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_signin_ignores_redirect_header_with_redirect_query() {
+        let uri = Uri::from_static("/signin?rd=%2Fprivate%3Fpage%3D1");
+        let mut headers = HeaderMap::new();
+        headers.insert(X_AUTH_REQUEST_REDIRECT, HeaderValue::from_static("/private?page=1"));
+        let query = Query::<SignInQuery>::try_from_uri(&uri).unwrap();
+        let response = signin(uri, headers, query).await.unwrap().into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.headers().get(header::LOCATION).is_none());
+    }
 
     #[test]
     fn test_unauthenticated_response_without_signin() {
