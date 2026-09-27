@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 use serde::Deserialize;
 use tokio::io::{stdin, AsyncBufReadExt, BufReader};
 
-use crate::service::{hash_password, ServiceConfig};
+use crate::service::{hash_password, ServiceConfig, SessionSecretKey};
 
 #[derive(Debug, Parser)]
 struct GenKeyArgs {
@@ -64,7 +64,7 @@ struct Setting {
 
 struct ServeOptions {
     session_absolute_timeout_hours: u64,
-    session_secret_key: Vec<u8>,
+    session_secret_key: SessionSecretKey,
     address: String,
     users: HashMap<String, String>,
 }
@@ -89,6 +89,8 @@ impl ServeOptions {
             (None, Some(key)) => key.into_bytes(),
             _ => bail!("session secret key is required"),
         };
+        let session_secret_key =
+            SessionSecretKey::try_from(session_secret_key).context("invalid session secret key")?;
         let users: HashMap<String, String> =
             HashMap::from_iter(setting.users.into_iter().map(|u| (u.username, u.password)));
         let address = args.address.or(setting.address).unwrap_or("127.0.0.1:8080".into());
@@ -123,8 +125,8 @@ impl GenKeyOptions {
     }
 
     async fn run(self) -> Result<()> {
-        let key = ServiceConfig::generate_key();
-        let key = hex::encode(key);
+        let key = SessionSecretKey::generate();
+        let key = hex::encode(key.as_bytes());
         match self.output {
             Some(path) => {
                 let text = format!("{}\n", key);

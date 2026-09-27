@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use super::auth::verify_password;
 use super::headers::{X_AUTH_REQUEST_REDIRECT, X_AUTH_REQUEST_SIGNIN, X_AUTH_REQUEST_USER};
+use super::key::SessionSecretKey;
 use super::page::get_signin_html;
 use super::redirection::{add_query_to_path, normalize_path};
 use super::session::{Session, ValidationOptions};
@@ -24,15 +25,8 @@ const SESSION_COOKIE_NAME: &str = "session";
 #[derive(Debug, Clone)]
 pub struct ServiceConfig {
     pub session_absolute_timeout: Duration,
-    pub session_secret_key: Vec<u8>,
+    pub session_secret_key: SessionSecretKey,
     pub users: HashMap<String, String>,
-}
-
-impl FromRef<ServiceConfig> for Key {
-    fn from_ref(config: &ServiceConfig) -> Self {
-        let key: &[u8] = &config.session_secret_key;
-        key.try_into().expect("invalid session secret key")
-    }
 }
 
 impl ServiceConfig {
@@ -46,9 +40,11 @@ impl ServiceConfig {
             .fallback(|| async { (StatusCode::NOT_FOUND, "not found") })
             .with_state(self)
     }
+}
 
-    pub fn generate_key() -> Vec<u8> {
-        Key::generate().master().into()
+impl FromRef<ServiceConfig> for Key {
+    fn from_ref(config: &ServiceConfig) -> Self {
+        config.session_secret_key.cookie_key()
     }
 }
 
