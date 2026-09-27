@@ -2,17 +2,17 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use super::auth::verify_password;
-use super::headers::{X_AUTH_REQUEST_REDIRECT, X_AUTH_REQUEST_USER};
+use super::headers::{X_AUTH_REQUEST_REDIRECT, X_AUTH_REQUEST_SIGNIN, X_AUTH_REQUEST_USER};
 use super::page::get_signin_html;
 use super::redirection::{add_query_to_path, normalize_path};
 use super::session::{Session, ValidationOptions};
 
 use axum::extract::{FromRef, Query, State};
 use axum::headers::{Host, Origin};
-use axum::http::{HeaderMap, StatusCode, Uri};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::Result as AxumResult;
-use axum::response::{IntoResponse, Redirect};
-use axum::routing::{get, post};
+use axum::response::{IntoResponse, Redirect, Response};
+use axum::routing::{any, get, post};
 use axum::{Json, Router, TypedHeader};
 use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
 use chrono::Utc;
@@ -42,7 +42,7 @@ impl ServiceConfig {
             .route("/signin", get(signin))
             .route("/signout", get(signout))
             .route("/authenticate", post(authenticate))
-            .route("/userinfo", get(userinfo))
+            .route("/userinfo", any(userinfo))
             .fallback(|| async { (StatusCode::NOT_FOUND, "not found") })
             .with_state(self)
     }
@@ -86,6 +86,31 @@ impl IntoResponse for JsonError {
 
 fn check_origin(origin: &Origin, host: &Host) -> bool {
     origin.hostname() == host.hostname() && origin.port() == host.port()
+}
+
+fn no_store(response: impl IntoResponse) -> Response {
+    let mut response = response.into_response();
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+fn unauthenticated_response(uri: &Uri, headers: &HeaderMap) -> Result<Response, StatusCode> {
+    let Some(signin_header) = headers.get(X_AUTH_REQUEST_SIGNIN) else {
+        return Ok(no_store(JsonError::Unauthenticated));
+    };
+
+    let signin = signin_header.to_str().ok().ok_or(StatusCode::BAD_REQUEST)?;
+    let signin = normalize_path(uri.path(), signin).ok_or(StatusCode::BAD_REQUEST)?;
+    let location = match headers.get(X_AUTH_REQUEST_REDIRECT) {
+        Some(redirect_header) => {
+            let rd = redirect_header.to_str().ok().ok_or(StatusCode::BAD_REQUEST)?;
+            let rd = normalize_path(uri.path(), rd).ok_or(StatusCode::BAD_REQUEST)?;
+            add_query_to_path(&signin, "rd", &rd).ok_or(StatusCode::BAD_REQUEST)?
+        }
+        None => signin,
+    };
+
+    Ok(no_store(Redirect::to(&location)))
 }
 
 async fn signin(uri: Uri, headers: HeaderMap) -> AxumResult<impl IntoResponse> {
@@ -164,16 +189,75 @@ async fn authenticate(
 
 async fn userinfo(
     State(config): State<ServiceConfig>,
+    uri: Uri,
+    headers: HeaderMap,
     jar: SignedCookieJar,
-) -> AxumResult<impl IntoResponse> {
-    let cookie = jar.get(SESSION_COOKIE_NAME).ok_or(JsonError::Unauthenticated)?;
+) -> Result<Response, StatusCode> {
+    let Some(cookie) = jar.get(SESSION_COOKIE_NAME) else {
+        return unauthenticated_response(&uri, &headers);
+    };
     let session = Session::from_cookie(cookie);
     let options =
         ValidationOptions { now: None, absolute_timeout: config.session_absolute_timeout };
     if !session.is_valid(options) {
-        return Err(JsonError::Unauthenticated.into());
+        return unauthenticated_response(&uri, &headers);
     }
     let headers = [(X_AUTH_REQUEST_USER, session.subject.clone())];
     let resp = Json::from(session);
-    Ok((headers, resp))
+    Ok(no_store((headers, resp)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_unauthenticated_response_without_signin() {
+        let uri = Uri::from_static("/userinfo");
+        let headers = HeaderMap::new();
+
+        let response = unauthenticated_response(&uri, &headers).unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.headers().get(header::CACHE_CONTROL).unwrap(), "no-store");
+    }
+
+    #[test]
+    fn test_unauthenticated_response_with_signin() {
+        let uri = Uri::from_static("/userinfo");
+        let mut headers = HeaderMap::new();
+        headers.insert(X_AUTH_REQUEST_SIGNIN, HeaderValue::from_static("/_auth/signin"));
+        headers.insert(X_AUTH_REQUEST_REDIRECT, HeaderValue::from_static("/private?page=1"));
+
+        let response = unauthenticated_response(&uri, &headers).unwrap();
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            response.headers().get(header::LOCATION).unwrap(),
+            "/_auth/signin?rd=%2Fprivate%3Fpage%3D1"
+        );
+        assert_eq!(response.headers().get(header::CACHE_CONTROL).unwrap(), "no-store");
+    }
+
+    #[test]
+    fn test_unauthenticated_response_with_signin_without_redirect() {
+        let uri = Uri::from_static("/userinfo");
+        let mut headers = HeaderMap::new();
+        headers.insert(X_AUTH_REQUEST_SIGNIN, HeaderValue::from_static("/_auth/signin"));
+
+        let response = unauthenticated_response(&uri, &headers).unwrap();
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(response.headers().get(header::LOCATION).unwrap(), "/_auth/signin");
+    }
+
+    #[test]
+    fn test_unauthenticated_response_rejects_external_signin() {
+        let uri = Uri::from_static("/userinfo");
+        let mut headers = HeaderMap::new();
+        headers
+            .insert(X_AUTH_REQUEST_SIGNIN, HeaderValue::from_static("https://example.com/signin"));
+
+        assert!(unauthenticated_response(&uri, &headers).is_err());
+    }
 }
