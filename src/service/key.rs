@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 
 use axum_extra::extract::cookie::Key;
 use thiserror::Error;
@@ -13,8 +14,12 @@ impl fmt::Debug for SessionSecretKey {
 }
 
 #[derive(Debug, Error)]
-#[error("session secret key must be at least 64 bytes")]
-pub struct InvalidSessionSecretKey;
+pub enum InvalidSessionSecretKey {
+    #[error("session secret key must be at least 64 bytes")]
+    InvalidLength,
+    #[error("session secret key must be formatted as hex string")]
+    InvalidHexValue,
+}
 
 impl SessionSecretKey {
     pub fn generate() -> Self {
@@ -30,11 +35,12 @@ impl SessionSecretKey {
     }
 }
 
-impl TryFrom<Vec<u8>> for SessionSecretKey {
-    type Error = InvalidSessionSecretKey;
+impl FromStr for SessionSecretKey {
+    type Err = InvalidSessionSecretKey;
 
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        Key::try_from(value.as_slice()).map(Self).map_err(|_| InvalidSessionSecretKey)
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bin = hex::decode(s).map_err(|_| InvalidSessionSecretKey::InvalidHexValue)?;
+        Key::try_from(bin.as_slice()).map(Self).map_err(|_| InvalidSessionSecretKey::InvalidLength)
     }
 }
 
@@ -44,19 +50,25 @@ mod tests {
 
     #[test]
     fn test_session_secret_key_accepts_64_bytes() {
-        let actual = SessionSecretKey::try_from(vec![0; 64]);
+        let actual = "00".repeat(64).parse::<SessionSecretKey>();
         assert!(actual.is_ok());
     }
 
     #[test]
     fn test_session_secret_key_rejects_63_bytes() {
-        let actual = SessionSecretKey::try_from(vec![0; 63]);
+        let actual = "00".repeat(63).parse::<SessionSecretKey>();
         assert!(actual.is_err());
     }
 
     #[test]
+    fn test_session_secret_key_rejects_invalid_hex() {
+        let actual = "zz".repeat(64).parse::<SessionSecretKey>();
+        assert!(matches!(actual, Err(InvalidSessionSecretKey::InvalidHexValue)));
+    }
+
+    #[test]
     fn test_session_secret_key_debug_is_redacted() {
-        let key = SessionSecretKey::try_from(vec![42; 64]).unwrap();
+        let key = "2a".repeat(64).parse::<SessionSecretKey>().unwrap();
         let actual = format!("{:?}", key);
         assert_eq!(actual, "SessionSecretKey(<redacted>)");
     }

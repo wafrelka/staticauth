@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::str::from_utf8;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -69,11 +68,9 @@ struct ServeOptions {
     users: HashMap<String, String>,
 }
 
-async fn read_key(path: PathBuf) -> Result<Vec<u8>> {
-    let content = tokio::fs::read(path).await.context("could not read key file")?;
-    let text = from_utf8(&content).context("could not parse key file")?;
-    let text = text.trim_end();
-    hex::decode(text).context("invalid hex string in key file")
+async fn read_key(path: PathBuf) -> Result<SessionSecretKey> {
+    let content = tokio::fs::read_to_string(path).await.context("could not read key file")?;
+    content.trim_end().parse().context("could not parse key file")
 }
 
 impl ServeOptions {
@@ -85,12 +82,10 @@ impl ServeOptions {
         let session_secret_key_file =
             args.session_secret_key_file.or(setting.session_secret_key_file);
         let session_secret_key = match (session_secret_key_file, setting.session_secret_key) {
-            (Some(path), _) => read_key(path).await.context("could not parse key file")?,
-            (None, Some(key)) => key.into_bytes(),
+            (Some(path), _) => read_key(path).await?,
+            (None, Some(key)) => key.parse().context("invalid session secret key")?,
             _ => bail!("session secret key is required"),
         };
-        let session_secret_key =
-            SessionSecretKey::try_from(session_secret_key).context("invalid session secret key")?;
         let users: HashMap<String, String> =
             HashMap::from_iter(setting.users.into_iter().map(|u| (u.username, u.password)));
         let address = args.address.or(setting.address).unwrap_or("127.0.0.1:8080".into());
