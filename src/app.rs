@@ -110,9 +110,11 @@ impl ServeOptions {
         };
         let service = config.build();
 
-        let address = self.address.parse().context("could not parse address")?;
-        let server = axum::Server::bind(&address);
-        server.serve(service.into_make_service()).await.context("error while running server")?;
+        let address: std::net::SocketAddr =
+            self.address.parse().context("could not parse address")?;
+        let listener =
+            tokio::net::TcpListener::bind(address).await.context("could not bind address")?;
+        axum::serve(listener, service).await.context("error while running server")?;
         Ok(())
     }
 }

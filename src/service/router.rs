@@ -10,13 +10,14 @@ use super::redirection::{add_query_to_path, normalize_path};
 use super::session::{Session, ValidationOptions};
 
 use axum::extract::{FromRef, Query, State};
-use axum::headers::{Host, Origin};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::Result as AxumResult;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{any, get, post};
-use axum::{Json, Router, TypedHeader};
+use axum::{Json, Router};
 use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
+use axum_extra::headers::{Host, Origin};
+use axum_extra::TypedHeader;
 use chrono::Utc;
 use serde::Deserialize;
 use serde_json::json;
@@ -167,7 +168,7 @@ async fn signout(
         _ => "./signin".into(),
     };
     let rd = normalize_path(uri.path(), &rd).ok_or(StatusCode::BAD_REQUEST)?;
-    let jar = jar.remove(Cookie::named(SESSION_COOKIE_NAME));
+    let jar = jar.remove(Cookie::build(SESSION_COOKIE_NAME));
     Ok((jar, Redirect::to(&rd)))
 }
 

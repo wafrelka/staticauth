@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use argon2::password_hash::rand_core::OsRng;
-use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use thiserror::Error;
 
@@ -25,19 +23,19 @@ pub fn verify_password(
     }
 
     let entry = users.get_key_value(username).unwrap_or(users.iter().next().unwrap());
-    let hash = PasswordHash::new(entry.1).map_err(PasswordError::InvalidPasswordHash)?;
+    let hash =
+        PasswordHash::new(entry.1).map_err(|err| PasswordError::InvalidPasswordHash(err.into()))?;
     match Argon2::default().verify_password(password.as_bytes(), &hash) {
         Ok(()) => Ok(entry.0 == username),
-        Err(argon2::password_hash::Error::Password) => Ok(false),
+        Err(argon2::password_hash::Error::PasswordInvalid) => Ok(false),
         Err(err) => Err(PasswordError::InvalidPasswordHash(err)),
     }
 }
 
 pub fn hash_password(password: &str) -> Result<String, PasswordError> {
     let argon2 = Argon2::default();
-    let salt = SaltString::generate(&mut OsRng);
     argon2
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password(password.as_bytes())
         .map(|h| h.to_string())
         .map_err(PasswordError::HashingFailed)
 }
