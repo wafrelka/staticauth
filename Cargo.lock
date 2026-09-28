@@ -1076,6 +1076,7 @@ dependencies = [
  "clap",
  "env_logger",
  "hex",
+ "hyper",
  "log",
  "serde",
  "serde_json",
