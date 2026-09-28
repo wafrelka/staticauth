@@ -241,6 +241,45 @@ async fn userinfo(
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_check_origin_rejects_different_host() {
+        let origin = Origin::try_from_parts("http", "example.com", 8080).unwrap();
+        let host = Host::from("localhost:8080".parse::<axum::http::uri::Authority>().unwrap());
+
+        assert!(!check_origin(&origin, &host));
+    }
+
+    #[tokio::test]
+    async fn test_signout_removes_session_cookie() {
+        let key = Key::generate();
+        let response = SignedCookieJar::new(key.clone())
+            .add(Cookie::new(SESSION_COOKIE_NAME, "value"))
+            .into_response();
+        let cookie = response
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(header::COOKIE, HeaderValue::from_str(cookie).unwrap());
+        let jar = SignedCookieJar::from_headers(&headers, key);
+        assert!(jar.get(SESSION_COOKIE_NAME).is_some());
+        let uri = Uri::from_static("/signout");
+        let query = Query::<SignOutQuery>::try_from_uri(&uri).unwrap();
+
+        let response = signout(uri, query, jar).await.unwrap().into_response();
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(response.headers().get(header::LOCATION).unwrap(), "/signin");
+        let removal_cookie = response.headers().get(header::SET_COOKIE).unwrap().to_str().unwrap();
+        assert!(removal_cookie.starts_with("session=;"));
+        assert!(removal_cookie.contains("Max-Age=0"));
+    }
+
     #[tokio::test]
     async fn test_signin_redirects_from_redirect_header_without_redirect_query() {
         let uri = Uri::from_static("/signin");
