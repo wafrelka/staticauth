@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use super::auth::verify_password;
@@ -29,6 +30,23 @@ pub struct ServiceConfig {
     pub users: HashMap<String, String>,
 }
 
+#[derive(Debug, Clone)]
+struct AppState {
+    session_absolute_timeout: Duration,
+    session_secret_key: SessionSecretKey,
+    users: Arc<HashMap<String, String>>,
+}
+
+impl From<ServiceConfig> for AppState {
+    fn from(config: ServiceConfig) -> Self {
+        Self {
+            session_absolute_timeout: config.session_absolute_timeout,
+            session_secret_key: config.session_secret_key,
+            users: Arc::new(config.users),
+        }
+    }
+}
+
 impl ServiceConfig {
     pub fn build(self) -> Router {
         Router::new()
@@ -38,13 +56,13 @@ impl ServiceConfig {
             .route("/authenticate", post(authenticate))
             .route("/userinfo", any(userinfo))
             .fallback(|| async { (StatusCode::NOT_FOUND, "not found") })
-            .with_state(self)
+            .with_state(AppState::from(self))
     }
 }
 
-impl FromRef<ServiceConfig> for Key {
-    fn from_ref(config: &ServiceConfig) -> Self {
-        config.session_secret_key.cookie_key()
+impl FromRef<AppState> for Key {
+    fn from_ref(state: &AppState) -> Self {
+        state.session_secret_key.cookie_key()
     }
 }
 
@@ -161,7 +179,7 @@ struct AuthenticateRequest {
 }
 
 async fn authenticate(
-    State(config): State<ServiceConfig>,
+    State(state): State<AppState>,
     uri: Uri,
     jar: SignedCookieJar,
     TypedHeader(origin): TypedHeader<Origin>,
@@ -179,7 +197,7 @@ async fn authenticate(
     };
     let rd = normalize_path(uri.path(), &rd).ok_or(JsonError::InvalidRedirect)?;
 
-    let ok = verify_password(config.users, &req.username, &req.password).map_err(|err| {
+    let ok = verify_password(&state.users, &req.username, &req.password).map_err(|err| {
         log::error!("password verification error: {}", err);
         JsonError::InternalError
     })?;
@@ -195,7 +213,7 @@ async fn authenticate(
 }
 
 async fn userinfo(
-    State(config): State<ServiceConfig>,
+    State(state): State<AppState>,
     uri: Uri,
     headers: HeaderMap,
     jar: SignedCookieJar,
@@ -204,8 +222,7 @@ async fn userinfo(
         return unauthenticated_response(&uri, &headers);
     };
     let session = Session::from_cookie(cookie);
-    let options =
-        ValidationOptions { now: None, absolute_timeout: config.session_absolute_timeout };
+    let options = ValidationOptions { now: None, absolute_timeout: state.session_absolute_timeout };
     if !session.is_valid(options) {
         return unauthenticated_response(&uri, &headers);
     }

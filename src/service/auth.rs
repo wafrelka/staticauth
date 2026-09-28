@@ -16,7 +16,7 @@ pub enum PasswordError {
 }
 
 pub fn verify_password(
-    users: HashMap<String, String>,
+    users: &HashMap<String, String>,
     username: &str,
     password: &str,
 ) -> Result<bool, PasswordError> {
@@ -57,7 +57,7 @@ mod tests {
         let users: HashMap<String, String> =
             [("user".into(), hash_password("p@ssw0rd").unwrap())].into();
         let expected = Ok(true);
-        let actual = verify_password(users, "user", "p@ssw0rd");
+        let actual = verify_password(&users, "user", "p@ssw0rd");
         assert_eq!(expected, actual);
     }
 
@@ -66,7 +66,7 @@ mod tests {
         let users: HashMap<String, String> =
             [("user".into(), hash_password("p@ssw0rd").unwrap())].into();
         let expected = Ok(false);
-        let actual = verify_password(users, "user", "wrong-p@ssw0rd");
+        let actual = verify_password(&users, "user", "wrong-p@ssw0rd");
         assert_eq!(expected, actual);
     }
 
@@ -75,14 +75,14 @@ mod tests {
         let users: HashMap<String, String> =
             [("user".into(), hash_password("p@ssw0rd").unwrap())].into();
         let expected = Ok(false);
-        let actual = verify_password(users, "wrong-user", "p@ssw0rd");
+        let actual = verify_password(&users, "wrong-user", "p@ssw0rd");
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn test_verify_password_invalid_hash() {
         let users = [("user".into(), "invalid".into())].into();
-        let actual = verify_password(users, "user", "p@ssw0rd");
+        let actual = verify_password(&users, "user", "p@ssw0rd");
         assert!(matches!(actual, Err(PasswordError::InvalidPasswordHash(_))));
     }
 }
