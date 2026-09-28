@@ -86,8 +86,15 @@ impl ServeOptions {
             (None, Some(key)) => key.parse().context("invalid session secret key")?,
             _ => bail!("session secret key is required"),
         };
-        let users: HashMap<String, String> =
-            HashMap::from_iter(setting.users.into_iter().map(|u| (u.username, u.password)));
+        if setting.users.is_empty() {
+            bail!("at least one user is required");
+        }
+        let mut users = HashMap::with_capacity(setting.users.len());
+        for user in setting.users {
+            if users.insert(user.username.clone(), user.password).is_some() {
+                bail!("duplicate user: {}", user.username);
+            }
+        }
         let address = args.address.or(setting.address).unwrap_or("127.0.0.1:8080".into());
 
         Ok(Self { session_absolute_timeout_hours, session_secret_key, address, users })
