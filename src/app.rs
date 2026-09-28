@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
-use tokio::io::{stdin, AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, BufReader, stdin};
 
-use crate::service::{hash_password, ServiceConfig, SessionSecretKey};
+use crate::service::{ServiceConfig, SessionSecretKey, hash_password};
 
 #[derive(Debug, Parser)]
 struct GenKeyArgs {

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 
-use staticauth::app::{run, Args};
+use staticauth::app::{Args, run};
 
 #[tokio::main]
 async fn main() -> Result<()> {

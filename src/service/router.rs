@@ -10,14 +10,14 @@ use super::redirection::{add_query_to_path, normalize_path};
 use super::session::{Session, ValidationOptions};
 
 use axum::extract::{FromRef, Query, State};
-use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri, header};
 use axum::response::Result as AxumResult;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{any, get, post};
 use axum::{Json, Router};
+use axum_extra::TypedHeader;
 use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
 use axum_extra::headers::{Host, Origin};
-use axum_extra::TypedHeader;
 use chrono::Utc;
 use serde::Deserialize;
 use serde_json::json;
