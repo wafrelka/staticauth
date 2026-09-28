@@ -21,8 +21,8 @@ pub struct ValidationOptions {
 }
 
 impl Session {
-    pub fn from_cookie(cookie: Cookie) -> Self {
-        serde_json::from_str(cookie.value()).expect("could not deserialize session")
+    pub fn from_cookie(cookie: Cookie) -> serde_json::Result<Self> {
+        serde_json::from_str(cookie.value())
     }
 
     pub fn to_cookie<'a>(&self, name: &'a str) -> Cookie<'a> {
@@ -37,7 +37,7 @@ impl Session {
 
     pub fn is_valid(&self, options: ValidationOptions) -> bool {
         let now = options.now.unwrap_or_else(Utc::now);
-        self.issued_at + options.absolute_timeout >= now
+        self.issued_at <= now && self.issued_at + options.absolute_timeout >= now
     }
 }
 
@@ -50,7 +50,7 @@ mod tests {
     }
 
     #[test]
-    fn test_session_is_valid_ok() {
+    fn test_session_is_valid_within_absolute_timeout() {
         let options = ValidationOptions {
             now: Some(timestamp(100000 + 100)),
             absolute_timeout: Duration::from_secs(100),
@@ -62,7 +62,7 @@ mod tests {
     }
 
     #[test]
-    fn test_session_is_valid_expired() {
+    fn test_session_is_valid_rejects_expired_session() {
         let options = ValidationOptions {
             now: Some(timestamp(100000 + 101)),
             absolute_timeout: Duration::from_secs(100),
@@ -71,5 +71,23 @@ mod tests {
         let expected = false;
         let actual = session.is_valid(options);
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_session_is_valid_rejects_future_session() {
+        let options = ValidationOptions {
+            now: Some(timestamp(100000)),
+            absolute_timeout: Duration::from_secs(100),
+        };
+        let session = Session { subject: "".into(), issued_at: timestamp(100001) };
+
+        assert!(!session.is_valid(options));
+    }
+
+    #[test]
+    fn test_session_from_cookie_rejects_malformed_payload() {
+        let cookie = Cookie::new("session", "invalid");
+
+        assert!(Session::from_cookie(cookie).is_err());
     }
 }

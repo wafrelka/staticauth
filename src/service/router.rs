@@ -221,7 +221,13 @@ async fn userinfo(
     let Some(cookie) = jar.get(SESSION_COOKIE_NAME) else {
         return unauthenticated_response(&uri, &headers);
     };
-    let session = Session::from_cookie(cookie);
+    let session = match Session::from_cookie(cookie) {
+        Ok(session) => session,
+        Err(err) => {
+            log::debug!("invalid session cookie: {}", err);
+            return unauthenticated_response(&uri, &headers);
+        }
+    };
     let options = ValidationOptions { now: None, absolute_timeout: state.session_absolute_timeout };
     if !session.is_valid(options) {
         return unauthenticated_response(&uri, &headers);
