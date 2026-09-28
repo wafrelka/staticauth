@@ -138,7 +138,7 @@ async fn signin(
     uri: Uri,
     headers: HeaderMap,
     Query(query): Query<SignInQuery>,
-) -> AxumResult<impl IntoResponse> {
+) -> AxumResult<impl IntoResponse, StatusCode> {
     if query.redirect_to.is_none() {
         let Some(redirect_header) = headers.get(X_AUTH_REQUEST_REDIRECT) else {
             return Ok(get_signin_html().into_response());
@@ -162,7 +162,7 @@ async fn signout(
     uri: Uri,
     Query(query): Query<SignOutQuery>,
     jar: SignedCookieJar,
-) -> AxumResult<impl IntoResponse> {
+) -> AxumResult<impl IntoResponse, StatusCode> {
     let rd = match query.redirect_to {
         Some(r) if !r.is_empty() => r,
         _ => "./signin".into(),
@@ -186,10 +186,10 @@ async fn authenticate(
     TypedHeader(origin): TypedHeader<Origin>,
     TypedHeader(host): TypedHeader<Host>,
     Json(req): Json<AuthenticateRequest>,
-) -> AxumResult<impl IntoResponse> {
+) -> AxumResult<impl IntoResponse, JsonError> {
     if !check_origin(&origin, &host) {
         log::debug!("invalid origin: origin = '{}', host = '{}'", origin, host);
-        return Err(JsonError::InvalidOrigin.into());
+        return Err(JsonError::InvalidOrigin);
     }
 
     let rd = match req.redirect_to {
@@ -203,7 +203,7 @@ async fn authenticate(
         JsonError::InternalError
     })?;
     if !ok {
-        return Err(JsonError::InvalidCredential.into());
+        return Err(JsonError::InvalidCredential);
     }
 
     log::info!("user '{}' authenticated", req.username);
